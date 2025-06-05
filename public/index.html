@@ -1,0 +1,2582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tree Planting Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            min-height: 100vh;
+            color: #1a1a1a;
+            padding-bottom: 80px;
+        }
+
+        .app-container {
+            max-width: 100vw;
+            min-height: 100vh;
+            background: #f8fafc;
+            position: relative;
+        }
+
+        /* Enhanced Error Message System */
+        .error-container {
+            position: fixed;
+            top: env(safe-area-inset-top, 20px);
+            left: 16px;
+            right: 16px;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        .error-toast {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 8px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            border-left: 4px solid;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            animation: slideInDown 0.3s ease-out;
+            pointer-events: auto;
+            max-width: 100%;
+            word-wrap: break-word;
+        }
+
+        .error-toast.success {
+            border-left-color: #10b981;
+            background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+        }
+
+        .error-toast.error {
+            border-left-color: #ef4444;
+            background: linear-gradient(135deg, #fef2f2 0%, #fef7f7 100%);
+        }
+
+        .error-toast.warning {
+            border-left-color: #f59e0b;
+            background: linear-gradient(135deg, #fffbeb 0%, #fefce8 100%);
+        }
+
+        .error-toast.info {
+            border-left-color: #3b82f6;
+            background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+        }
+
+        .error-icon {
+            font-size: 1.2em;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .error-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .error-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 0.9em;
+        }
+
+        .error-message {
+            font-size: 0.85em;
+            line-height: 1.4;
+            opacity: 0.8;
+        }
+
+        .error-close {
+            background: none;
+            border: none;
+            font-size: 1.1em;
+            cursor: pointer;
+            opacity: 0.6;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .error-close:hover {
+            opacity: 1;
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        @keyframes slideInDown {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* Field-specific error messages */
+        .field-error {
+            color: #dc2626;
+            font-size: 0.8em;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            animation: fadeIn 0.2s ease-in;
+        }
+
+        .field-error i {
+            font-size: 0.9em;
+        }
+
+        /* Input validation states */
+        .form-input.error, .form-select.error {
+            border-color: #dc2626;
+            background-color: #fef2f2;
+        }
+
+        .form-input.success, .form-select.success {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+
+        /* Connection status indicator */
+        .connection-status {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #374151;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection-status.offline {
+            display: flex;
+            background: #dc2626;
+        }
+
+        .connection-status.reconnecting {
+            display: flex;
+            background: #f59e0b;
+        }
+
+        /* Loading States */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+
+        .loading i {
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Header */
+        .app-header {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: max(20px, env(safe-area-inset-top) + 10px) 16px 16px;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .app-title {
+            font-size: 1.5em;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .admin-badge {
+            background: rgba(245, 158, 11, 0.9);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .notification-icon {
+            position: relative;
+            font-size: 1.2em;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: background-color 0.2s ease;
+        }
+
+        .notification-icon:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 0 0 20px 0;
+            min-height: calc(100vh - 160px);
+        }
+
+        .page {
+            display: none;
+            padding: 20px 16px;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid #f1f5f9;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-action {
+            color: #10b981;
+            font-size: 0.9em;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: background-color 0.2s ease;
+            border: none;
+            background: none;
+        }
+
+        .card-action:hover {
+            background: #f0fdf4;
+        }
+
+        /* Welcome Section */
+        .welcome-section {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .welcome-title {
+            font-size: 1.4em;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .welcome-subtitle {
+            opacity: 0.9;
+            font-size: 0.95em;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 0;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            border: 1px solid #f1f5f9;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            min-height: 70px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        .stat-value {
+            font-size: 1.6em;
+            font-weight: 700;
+            color: #10b981;
+            margin-bottom: 4px;
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.75em;
+            color: #64748b;
+            font-weight: 500;
+            line-height: 1.2;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #374151;
+            font-size: 0.9em;
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s ease;
+            background: white;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-weight: 600;
+            font-size: 0.95em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #10b981;
+            color: #10b981;
+        }
+
+        .btn-outline:hover {
+            background: #10b981;
+            color: white;
+        }
+
+        /* Tree Items */
+        .tree-item {
+            display: flex;
+            gap: 12px;
+            padding: 16px;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            border: 1px solid #f1f5f9;
+        }
+
+        .tree-image {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        .tree-info {
+            flex: 1;
+        }
+
+        .tree-name {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .tree-details {
+            font-size: 0.85em;
+            color: #64748b;
+            line-height: 1.4;
+        }
+
+        .tree-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .tree-action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.8em;
+            cursor: pointer;
+            font-weight: 500;
+            min-width: 60px;
+        }
+
+        .tree-action-btn.delete {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            border-radius: 20px;
+            font-size: 0.85em;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn.active {
+            background: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+            border-top: 1px solid #f1f5f9;
+            z-index: 1000;
+        }
+
+        .nav-items {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 8px;
+            min-width: 60px;
+            position: relative;
+        }
+
+        .nav-item.active {
+            background: #dcfce7;
+            color: #059669;
+            transform: translateY(-2px);
+        }
+
+        .nav-item.active .nav-icon {
+            transform: scale(1.1);
+        }
+
+        .nav-icon {
+            font-size: 1.3em;
+            margin-bottom: 2px;
+            transition: transform 0.3s ease;
+        }
+
+        .nav-label {
+            font-size: 0.7em;
+            font-weight: 600;
+        }
+
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 1.3em;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+            transition: all 0.3s ease;
+            z-index: 999;
+            display: none;
+        }
+
+        .fab.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 24px rgba(16, 185, 129, 0.5);
+        }
+
+        /* Auth Section */
+        .auth-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .auth-title {
+            text-align: center;
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+
+        .auth-subtitle {
+            text-align: center;
+            color: #64748b;
+            margin-bottom: 32px;
+        }
+
+        .auth-toggle {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .auth-toggle a {
+            color: #10b981;
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Map */
+        .map-container {
+            height: 300px;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .map-toggle {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .map-toggle:hover {
+            background: #f1f5f9;
+        }
+
+        .map-toggle.active {
+            background: #dcfce7;
+            border-color: #10b981;
+        }
+
+        /* Empty States */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+
+        .empty-state i {
+            font-size: 3em;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 8px;
+            color: #374151;
+        }
+
+        .empty-state p {
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .quick-actions {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            
+            .error-container {
+                left: 8px;
+                right: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Error Container for Toast Messages -->
+    <div id="error-container" class="error-container"></div>
+    
+    <!-- Connection Status -->
+    <div id="connection-status" class="connection-status">
+        <i class="fas fa-wifi"></i>
+        <span>Checking connection...</span>
+    </div>
+
+    <!-- Authentication Section -->
+    <div id="auth-section" class="auth-section">
+        <div class="auth-card">
+            <div id="login-form">
+                <h1 class="auth-title">Welcome Back</h1>
+                <p class="auth-subtitle">Sign in to your tree planting account</p>
+                
+                <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" id="login-email" class="form-input" placeholder="Enter your email" value="test@example.com">
+                    <div id="login-email-error" class="field-error hidden">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>Please enter a valid email address</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="login-password" class="form-input" placeholder="Enter your password" value="test123">
+                    <div id="login-password-error" class="field-error hidden">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>Password is required</span>
+                    </div>
+                </div>
+                
+                <button class="btn" id="login-btn" onclick="login()">
+                    <i class="fas fa-sign-in-alt"></i> Sign In
+                </button>
+                
+                <div class="auth-toggle">
+                    Don't have an account? <a onclick="showSignup()">Sign Up</a>
+                </div>
+            </div>
+
+            <div id="signup-form" class="hidden">
+                <h1 class="auth-title">Join TreeTracker</h1>
+                <p class="auth-subtitle">Create your account to start planting</p>
+                
+                <div class="form-group">
+                    <label class="form-label">Full Name</label>
+                    <input type="text" id="signup-name" class="form-input" placeholder="Enter your full name" value="Test User">
+                    <div id="signup-name-error" class="field-error hidden">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>Full name is required</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" id="signup-email" class="form-input" placeholder="Enter your email" value="newuser@example.com">
+                    <div id="signup-email-error" class="field-error hidden">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>Please enter a valid email address</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Graduation Year</label>
+                    <input type="number" id="signup-graduation" class="form-input" placeholder="e.g., 2024" value="2024" min="1950" max="2050">
+                    <div id="signup-graduation-error" class="field-error hidden">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>Please enter a valid graduation year</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="signup-password" class="form-input" placeholder="Create a password" value="newuser123">
+                    <div id="signup-password-error" class="field-error hidden">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>Password must be at least 6 characters</span>
+                    </div>
+                </div>
+                
+                <button class="btn" id="signup-btn" onclick="signup()">
+                    <i class="fas fa-user-plus"></i> Create Account
+                </button>
+                
+                <div class="auth-toggle">
+                    Already have an account? <a onclick="showLogin()">Sign In</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="main-app" class="app-container hidden">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="app-title">
+                    <i class="fas fa-seedling"></i>
+                    TreeTracker
+                    <span id="admin-badge" class="admin-badge hidden">Admin</span>
+                </div>
+                <div class="header-actions">
+                    <div class="notification-icon" onclick="showNotifications()">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div class="notification-icon" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Home Page -->
+            <div id="home-page" class="page active">
+                <!-- Welcome Section -->
+                <div class="welcome-section">
+                    <div class="welcome-title">Welcome back, <span id="home-user-name">User</span>! 🌱</div>
+                    <div class="welcome-subtitle">Your journey to a greener world continues</div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="home-tree-count">0</div>
+                        <div class="stat-label">Trees Planted</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="home-rank">#-</div>
+                        <div class="stat-label">Your Rank</div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-bolt"></i> Quick Actions
+                        </h3>
+                    </div>
+                    <div class="quick-actions">
+                        <button class="btn" onclick="showAddTreeForm()">
+                            <i class="fas fa-plus"></i> Plant Tree
+                        </button>
+                        <button class="btn btn-outline" onclick="showPage('sessions')">
+                            <i class="fas fa-calendar"></i> Join Session
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Recent Newsletters -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-newspaper"></i> Latest News
+                        </h3>
+                    </div>
+                    <div id="recent-newsletters">
+                        <div class="loading">
+                            <i class="fas fa-spinner"></i>
+                            Loading news...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trees Page -->
+            <div id="trees-page" class="page">
+                <!-- Add Tree Form -->
+                <div class="card hidden" id="add-tree-form">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-plus"></i> Plant a New Tree
+                        </h3>
+                        <button class="card-action" onclick="toggleAddTreeForm()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Tree Photo *</label>
+                        <input type="file" id="tree-photo" class="form-input" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)">
+                        <div id="tree-photo-error" class="field-error hidden">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span>Please upload a photo of the tree</span>
+                        </div>
+                        <img id="photo-preview" class="hidden" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 12px;" alt="Photo preview">
+                        <div id="location-info" class="error-toast warning hidden" style="position: relative; margin-top: 12px;">
+                            <div class="error-icon">📍</div>
+                            <div class="error-content">
+                                <div class="error-title">Location Required</div>
+                                <div class="error-message">GPS location is needed for accurate tree tracking</div>
+                            </div>
+                            <button onclick="requestLocation()" class="btn" style="margin-top: 8px; padding: 8px 16px; font-size: 13px; width: auto;">
+                                📱 Share Location
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Tree Species *</label>
+                        <input type="text" id="tree-species" class="form-input" placeholder="e.g., Oak, Pine, Mango" required>
+                        <div id="tree-species-error" class="field-error hidden">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span>Please enter the tree species</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Activity Type *</label>
+                        <select id="tree-activity" class="form-select" required>
+                            <option value="">Select Activity</option>
+                            <option value="Planting">Planting</option>
+                            <option value="Transplanting">Transplanting</option>
+                            <option value="Maintenance">Maintenance</option>
+                            <option value="Monitoring">Monitoring</option>
+                            <option value="CAS Project">CAS Project</option>
+                        </select>
+                        <div id="tree-activity-error" class="field-error hidden">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span>Please select an activity type</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Location *</label>
+                        <input type="text" id="tree-location" class="form-input" placeholder="e.g., Central Park, Main Street" required>
+                        <div id="tree-location-error" class="field-error hidden">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span>Please enter the location</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">State/Region *</label>
+                        <input type="text" id="tree-state" class="form-input" placeholder="e.g., Tamil Nadu, California" required>
+                        <div id="tree-state-error" class="field-error hidden">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span>Please enter the state or region</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Additional Notes</label>
+                        <textarea id="tree-remarks" class="form-input form-textarea" placeholder="Any additional details about this tree..."></textarea>
+                    </div>
+
+                    <button class="btn" onclick="addTree()" id="add-tree-btn">
+                        <i class="fas fa-seedling"></i> Add Tree
+                    </button>
+                </div>
+
+                <!-- Tree Statistics -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-chart-bar"></i> Your Tree Statistics
+                        </h3>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="trees-total-count">0</div>
+                            <div class="stat-label">Total Trees</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="trees-species-count">0</div>
+                            <div class="stat-label">Different Species</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="trees-this-month">0</div>
+                            <div class="stat-label">This Month</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="trees-avg-age">0</div>
+                            <div class="stat-label">Avg Age (days)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-filter"></i> Filter Trees
+                        </h3>
+                        <button class="card-action" onclick="clearTreeFilters()">Clear</button>
+                    </div>
+
+                    <div class="filters">
+                        <button class="filter-btn active" data-filter="all" onclick="filterTrees('all')">All Trees</button>
+                        <button class="filter-btn" data-filter="mine" onclick="filterTrees('mine')">My Trees</button>
+                        <button class="filter-btn" data-filter="recent" onclick="filterTrees('recent')">Recent</button>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="text" id="tree-search" class="form-input" placeholder="Search by species, location, or planter..." oninput="searchTrees()">
+                    </div>
+
+                    <div class="map-toggle" onclick="toggleTreeMap()">
+                        <i class="fas fa-map"></i> Show/Hide Map View
+                    </div>
+
+                    <div id="tree-map-container" class="map-container hidden">
+                        <div id="tree-map" style="height: 100%; width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Trees List -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-list"></i> <span id="trees-list-title">All Trees</span>
+                        </h3>
+                        <button class="card-action" onclick="exportTreeData()">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                    </div>
+                    <div id="trees-list">
+                        <div class="loading">
+                            <i class="fas fa-spinner"></i>
+                            Loading trees...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sessions Page -->
+            <div id="sessions-page" class="page">
+                <!-- Upcoming Sessions -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-calendar-plus"></i> Upcoming Sessions
+                        </h3>
+                        <button class="card-action hidden" onclick="showCreateSessionForm()" id="create-session-btn">
+                            <i class="fas fa-plus"></i> Create
+                        </button>
+                    </div>
+                    <div id="upcoming-sessions">
+                        <div class="loading">
+                            <i class="fas fa-spinner"></i>
+                            Loading sessions...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- My Sessions -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-user-check"></i> My Registered Sessions
+                        </h3>
+                    </div>
+                    <div id="my-sessions">
+                        <div class="loading">
+                            <i class="fas fa-spinner"></i>
+                            Loading your sessions...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Page -->
+            <div id="profile-page" class="page">
+                <!-- User Info -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-user"></i> Profile Information
+                        </h3>
+                    </div>
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #10b981 0%, #059669 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 2em; margin: 0 auto 16px;">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <h2 id="profile-user-name">User Name</h2>
+                        <p style="color: #64748b; margin-bottom: 4px;" id="profile-user-email">user@example.com</p>
+                        <p style="color: #64748b; font-size: 0.9em;">Graduation: <span id="profile-user-graduation">2024</span></p>
+                    </div>
+                </div>
+
+                <!-- Personal Statistics -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-chart-line"></i> Your Impact
+                        </h3>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="profile-trees-planted">0</div>
+                            <div class="stat-label">Trees Planted</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="profile-sessions-attended">0</div>
+                            <div class="stat-label">Sessions Attended</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="profile-species-planted">0</div>
+                            <div class="stat-label">Species Planted</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="profile-rank">#-</div>
+                            <div class="stat-label">Leaderboard Rank</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Achievements -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-trophy"></i> Achievements
+                        </h3>
+                    </div>
+                    <div id="user-achievements">
+                        <div class="loading">
+                            <i class="fas fa-spinner"></i>
+                            Loading achievements...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Leaderboard -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-ranking-star"></i> Community Leaderboard
+                        </h3>
+                    </div>
+                    <div id="leaderboard">
+                        <div class="loading">
+                            <i class="fas fa-spinner"></i>
+                            Loading leaderboard...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin Panel -->
+                <div class="card hidden" id="admin-panel">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-cog"></i> Admin Panel
+                        </h3>
+                    </div>
+                    <div class="quick-actions">
+                        <button class="btn btn-secondary" onclick="showUserManagement()">
+                            <i class="fas fa-users"></i> Manage Users
+                        </button>
+                        <button class="btn btn-secondary" onclick="showNewsletterCreation()">
+                            <i class="fas fa-newspaper"></i> Create Newsletter
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <div class="nav-items">
+                <div class="nav-item active" onclick="showPage('home')" data-page="home">
+                    <div class="nav-icon"><i class="fas fa-home"></i></div>
+                    <div class="nav-label">Home</div>
+                </div>
+                <div class="nav-item" onclick="showPage('trees')" data-page="trees">
+                    <div class="nav-icon"><i class="fas fa-tree"></i></div>
+                    <div class="nav-label">Trees</div>
+                </div>
+                <div class="nav-item" onclick="showPage('sessions')" data-page="sessions">
+                    <div class="nav-icon"><i class="fas fa-calendar"></i></div>
+                    <div class="nav-label">Sessions</div>
+                </div>
+                <div class="nav-item" onclick="showPage('profile')" data-page="profile">
+                    <div class="nav-icon"><i class="fas fa-user"></i></div>
+                    <div class="nav-label">Profile</div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Floating Action Button -->
+        <button class="fab" id="fab-button" onclick="showAddTreeForm()">
+            <i class="fas fa-plus"></i>
+        </button>
+    </div>
+
+    <script>
+        // Configuration - Update these with your Vercel deployment URL
+        const API_BASE_URL = window.location.hostname === 'localhost' ? 
+                             'http://localhost:3000' : 
+                             'https://your-vercel-app.vercel.app'; // Replace with your Vercel URL
+
+        // Global variables
+        let currentUser = null;
+        let authToken = null;
+        let trees = [];
+        let sessions = [];
+        let userSessions = [];
+        let newsletters = [];
+        let achievements = [];
+        let leaderboard = [];
+        let userLocation = null;
+        let treeMap = null;
+        let filteredTrees = [];
+        let currentFilter = 'all';
+
+        // Console logging for debugging
+        console.log('🌳 TreeTracker App Starting...');
+        console.log('API Base URL:', API_BASE_URL);
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔍 DOM loaded, initializing app...');
+            
+            // Check for stored auth token
+            const storedToken = localStorage.getItem('treetracker_token');
+            const storedUser = localStorage.getItem('treetracker_user');
+            
+            if (storedToken && storedUser) {
+                try {
+                    authToken = storedToken;
+                    currentUser = JSON.parse(storedUser);
+                    showMainApp();
+                } catch (error) {
+                    console.error('Failed to restore session:', error);
+                    localStorage.removeItem('treetracker_token');
+                    localStorage.removeItem('treetracker_user');
+                }
+            }
+            
+            // Test alert system
+            setTimeout(() => {
+                showToast('🌳 TreeTracker loaded successfully!', 'success', 'Welcome!', 3000);
+            }, 1000);
+        });
+
+        // Enhanced Error Messaging System
+        function showToast(message, type = 'info', title = '', duration = 5000) {
+            console.log(`Toast (${type}): ${title} - ${message}`);
+            
+            const container = document.getElementById('error-container');
+            const toast = document.createElement('div');
+            toast.className = `error-toast ${type}`;
+            
+            const iconMap = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-triangle',
+                warning: 'fa-exclamation-circle',
+                info: 'fa-info-circle'
+            };
+            
+            const icon = iconMap[type] || 'fa-info-circle';
+            
+            toast.innerHTML = `
+                <div class="error-icon">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <div class="error-content">
+                    ${title ? `<div class="error-title">${title}</div>` : ''}
+                    <div class="error-message">${message}</div>
+                </div>
+                <button class="error-close" onclick="this.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            container.appendChild(toast);
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.remove();
+                    }
+                }, duration);
+            }
+        }
+
+        // API Helper Function with Authentication
+        async function apiCall(endpoint, options = {}) {
+            console.log(`🌐 API Call: ${options.method || 'GET'} ${endpoint}`);
+            
+            try {
+                updateConnectionStatus('reconnecting');
+                
+                const headers = {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                };
+
+                // Add auth token if available
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    headers,
+                    ...options
+                });
+
+                console.log(`📡 Response: ${response.status} ${response.statusText}`);
+
+                if (!response.ok) {
+                    let errorMessage = 'Server error occurred';
+                    let errorTitle = 'Connection Error';
+                    
+                    switch (response.status) {
+                        case 400:
+                            errorTitle = 'Invalid Request';
+                            errorMessage = 'The request data is invalid. Please check your inputs.';
+                            break;
+                        case 401:
+                            errorTitle = 'Authentication Failed';
+                            errorMessage = 'Invalid credentials. Please check your email and password.';
+                            // Clear stored auth on 401
+                            localStorage.removeItem('treetracker_token');
+                            localStorage.removeItem('treetracker_user');
+                            authToken = null;
+                            currentUser = null;
+                            break;
+                        case 403:
+                            errorTitle = 'Access Denied';
+                            errorMessage = 'You don\'t have permission to perform this action.';
+                            break;
+                        case 404:
+                            errorTitle = 'Service Unavailable';
+                            errorMessage = 'The server is not responding. Please ensure the backend is running.';
+                            break;
+                        case 409:
+                            errorTitle = 'Conflict';
+                            errorMessage = 'This data already exists or conflicts with existing data.';
+                            break;
+                        case 500:
+                            errorTitle = 'Server Error';
+                            errorMessage = 'Internal server error. Please try again later.';
+                            break;
+                        default:
+                            try {
+                                const errorData = await response.json();
+                                errorMessage = errorData.error || errorMessage;
+                            } catch (e) {
+                                // Use default message
+                            }
+                    }
+                    
+                    updateConnectionStatus('offline');
+                    throw new Error(JSON.stringify({ title: errorTitle, message: errorMessage }));
+                }
+
+                const data = await response.json();
+                console.log(`✅ API Success:`, data);
+                updateConnectionStatus('online');
+                return data;
+
+            } catch (error) {
+                console.error(`❌ API Error: ${endpoint}`, error);
+                
+                if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+                    updateConnectionStatus('offline');
+                    throw new Error(JSON.stringify({ 
+                        title: 'Connection Failed', 
+                        message: 'Cannot connect to server. Please check your internet connection and ensure the server is running.' 
+                    }));
+                }
+                
+                updateConnectionStatus('offline');
+                throw error;
+            }
+        }
+
+        // Authentication Functions
+        async function login() {
+            console.log('🔍 Login attempt started');
+            
+            if (!validateForm('login')) {
+                showToast('Please fix the errors above', 'error', 'Validation Failed');
+                return;
+            }
+
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+
+            const loginBtn = document.getElementById('login-btn');
+            const originalText = loginBtn.innerHTML;
+            setButtonLoading(loginBtn, true);
+
+            try {
+                const data = await apiCall('/api/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email, password })
+                });
+
+                if (data.success && data.user && data.token) {
+                    currentUser = data.user;
+                    authToken = data.token;
+                    
+                    // Store auth data
+                    localStorage.setItem('treetracker_token', authToken);
+                    localStorage.setItem('treetracker_user', JSON.stringify(currentUser));
+                    
+                    showToast('Welcome back! Ready to make a difference? 🌱', 'success', 'Login Successful');
+                    
+                    setTimeout(() => {
+                        showMainApp();
+                    }, 1000);
+                } else {
+                    showToast(data.error || 'Login failed. Please check your credentials.', 'error', 'Login Failed');
+                }
+
+            } catch (error) {
+                console.error('Login error:', error);
+                try {
+                    const errorObj = JSON.parse(error.message);
+                    showToast(errorObj.message, 'error', errorObj.title);
+                } catch (e) {
+                    showToast('Network error. Please check your connection and try again.', 'error', 'Connection Error');
+                }
+            } finally {
+                setButtonLoading(loginBtn, false, originalText);
+            }
+        }
+
+        async function signup() {
+            console.log('🔍 Signup attempt started');
+            
+            if (!validateForm('signup')) {
+                showToast('Please fix the errors above', 'error', 'Validation Failed');
+                return;
+            }
+
+            const name = document.getElementById('signup-name').value.trim();
+            const email = document.getElementById('signup-email').value.trim();
+            const graduation = document.getElementById('signup-graduation').value;
+            const password = document.getElementById('signup-password').value;
+
+            const signupBtn = document.getElementById('signup-btn');
+            const originalText = signupBtn.innerHTML;
+            setButtonLoading(signupBtn, true);
+
+            try {
+                const data = await apiCall('/api/users', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name,
+                        email,
+                        graduation: parseInt(graduation),
+                        password
+                    })
+                });
+
+                if (data.success && data.user) {
+                    showToast('Account created! Now logging you in...', 'success', 'Welcome!');
+                    
+                    // Auto-login after successful signup
+                    setTimeout(async () => {
+                        try {
+                            const loginData = await apiCall('/api/login', {
+                                method: 'POST',
+                                body: JSON.stringify({ email, password })
+                            });
+                            
+                            if (loginData.success) {
+                                currentUser = loginData.user;
+                                authToken = loginData.token;
+                                
+                                localStorage.setItem('treetracker_token', authToken);
+                                localStorage.setItem('treetracker_user', JSON.stringify(currentUser));
+                                
+                                showMainApp();
+                            }
+                        } catch (loginError) {
+                            showToast('Account created! Please login manually.', 'info', 'Registration Complete');
+                            showLogin();
+                        }
+                    }, 1000);
+                } else {
+                    showToast(data.error || 'Failed to create account. Please try again.', 'error', 'Signup Failed');
+                }
+
+            } catch (error) {
+                console.error('Signup error:', error);
+                try {
+                    const errorObj = JSON.parse(error.message);
+                    showToast(errorObj.message, 'error', errorObj.title);
+                } catch (e) {
+                    showToast('Network error. Please check your connection and try again.', 'error', 'Connection Error');
+                }
+            } finally {
+                setButtonLoading(signupBtn, false, originalText);
+            }
+        }
+
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                currentUser = null;
+                authToken = null;
+                trees = [];
+                sessions = [];
+                userSessions = [];
+                newsletters = [];
+                achievements = [];
+                leaderboard = [];
+                
+                // Clear stored data
+                localStorage.removeItem('treetracker_token');
+                localStorage.removeItem('treetracker_user');
+                
+                document.getElementById('auth-section').classList.remove('hidden');
+                document.getElementById('main-app').classList.add('hidden');
+                
+                showToast('You have been logged out successfully', 'info', 'Goodbye!');
+                showLogin();
+            }
+        }
+
+        function showMainApp() {
+            if (!currentUser || !currentUser.id) {
+                console.error('No valid user found');
+                showToast('Session error. Please login again.', 'error', 'Authentication Error');
+                return;
+            }
+
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+            
+            updateUserInfo();
+            
+            if (currentUser.isAdmin) {
+                document.getElementById('admin-badge').classList.remove('hidden');
+                document.getElementById('admin-panel').classList.remove('hidden');
+                document.getElementById('create-session-btn').classList.remove('hidden');
+            }
+            
+            showPage('home');
+            updateFAB();
+        }
+
+        // Data Loading Functions
+        async function loadDashboardData() {
+            console.log('🔍 Loading dashboard data...');
+            try {
+                await Promise.all([
+                    loadTrees(),
+                    loadNewsletters(),
+                    loadAchievements(),
+                    loadLeaderboard()
+                ]);
+                
+                updateDashboardStats();
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                showToast('Some dashboard data failed to load. Please refresh the page.', 'warning', 'Loading Warning');
+            }
+        }
+
+        async function loadTrees() {
+            try {
+                trees = await apiCall('/api/trees');
+                filteredTrees = trees;
+                console.log(`✅ Loaded ${trees.length} trees`);
+            } catch (error) {
+                console.error('Error loading trees:', error);
+                trees = [];
+                filteredTrees = [];
+                showToast('Unable to load tree data. Trees features may be limited.', 'warning', 'Data Loading Issue');
+            }
+        }
+
+        async function loadNewsletters() {
+            try {
+                newsletters = await apiCall('/api/newsletters');
+                updateRecentNewsletters();
+                console.log(`✅ Loaded ${newsletters.length} newsletters`);
+            } catch (error) {
+                console.error('Error loading newsletters:', error);
+                newsletters = [];
+                updateRecentNewsletters();
+            }
+        }
+
+        async function loadLeaderboard() {
+            try {
+                leaderboard = await apiCall('/api/leaderboard');
+                updateLeaderboardRank();
+                console.log(`✅ Loaded ${leaderboard.length} leaderboard entries`);
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+                leaderboard = [];
+                showToast('Leaderboard temporarily unavailable', 'info', '', 3000);
+            }
+        }
+
+        async function loadSessions() {
+            try {
+                sessions = await apiCall('/api/sessions');
+                updateSessionsDisplay();
+                console.log(`✅ Loaded ${sessions.length} sessions`);
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                sessions = [];
+                updateSessionsDisplay();
+            }
+        }
+
+        async function loadAchievements() {
+            try {
+                if (currentUser) {
+                    // Placeholder - achievements endpoint would be `/api/user/${currentUser.id}/achievements`
+                    achievements = [];
+                    updateRecentAchievements();
+                }
+            } catch (error) {
+                console.error('Error loading achievements:', error);
+                achievements = [];
+                updateRecentAchievements();
+            }
+        }
+
+        // Tree Management Functions
+        async function addTree() {
+            if (!validateTreeForm()) {
+                return;
+            }
+
+            const addTreeBtn = document.getElementById('add-tree-btn');
+            const originalText = addTreeBtn.innerHTML;
+            setButtonLoading(addTreeBtn, true);
+
+            const treeData = {
+                date: new Date().toISOString().split('T')[0],
+                dateTime: new Date().toISOString(),
+                location: document.getElementById('tree-location').value.trim(),
+                gpsCoordinates: userLocation ? `${userLocation.lat}, ${userLocation.lng}` : null,
+                lat: userLocation ? userLocation.lat : null,
+                lng: userLocation ? userLocation.lng : null,
+                typeOfActivity: document.getElementById('tree-activity').value,
+                species: document.getElementById('tree-species').value.trim(),
+                remarks: document.getElementById('tree-remarks').value.trim(),
+                plantedBy: currentUser.name,
+                plantedById: currentUser.id,
+                state: document.getElementById('tree-state').value.trim(),
+                graduation: currentUser.graduation,
+                photo: document.getElementById('photo-preview').src
+            };
+
+            try {
+                const data = await apiCall('/api/trees', {
+                    method: 'POST',
+                    body: JSON.stringify(treeData)
+                });
+
+                if (data.success) {
+                    showToast('Tree added successfully! Your contribution to a greener world is recorded. 🌱', 'success', 'Tree Planted!');
+                    
+                    // Check for new achievements
+                    if (data.newAchievements && data.newAchievements.length > 0) {
+                        data.newAchievements.forEach(achievement => {
+                            showToast(`${achievement.name}! ${achievement.icon}`, 'success', '🎉 Achievement Unlocked', 8000);
+                        });
+                    }
+                    
+                    // Reset form
+                    resetTreeForm();
+                    toggleAddTreeForm();
+                    
+                    await loadTreesData();
+                    
+                    if (document.getElementById('home-page').classList.contains('active')) {
+                        updateDashboardStats();
+                    }
+                } else {
+                    showToast(data.error || 'Failed to add tree', 'error', 'Upload Failed');
+                }
+            } catch (error) {
+                console.error('Error adding tree:', error);
+                try {
+                    const errorObj = JSON.parse(error.message);
+                    showToast(errorObj.message, 'error', errorObj.title);
+                } catch (e) {
+                    showToast('Network error. Please check your connection and try again.', 'error', 'Upload Failed');
+                }
+            } finally {
+                setButtonLoading(addTreeBtn, false, originalText);
+            }
+        }
+
+        function resetTreeForm() {
+            document.getElementById('tree-photo').value = '';
+            document.getElementById('photo-preview').classList.add('hidden');
+            document.getElementById('tree-species').value = '';
+            document.getElementById('tree-activity').value = '';
+            document.getElementById('tree-location').value = '';
+            document.getElementById('tree-state').value = '';
+            document.getElementById('tree-remarks').value = '';
+            document.getElementById('location-info').classList.add('hidden');
+            userLocation = null;
+        }
+
+        async function deleteTree(treeId) {
+            if (!confirm('Are you sure you want to delete this tree record? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const data = await apiCall(`/api/trees/${treeId}`, {
+                    method: 'DELETE'
+                });
+
+                if (data.success) {
+                    showToast('Tree record deleted successfully.', 'success', 'Record Deleted');
+                    await loadTreesData();
+                    
+                    if (document.getElementById('home-page').classList.contains('active')) {
+                        updateDashboardStats();
+                    }
+                } else {
+                    showToast('Failed to delete tree record.', 'error', 'Delete Failed');
+                }
+            } catch (error) {
+                console.error('Error deleting tree:', error);
+                try {
+                    const errorObj = JSON.parse(error.message);
+                    showToast(errorObj.message, 'error', errorObj.title);
+                } catch (e) {
+                    showToast('Network error. Please try again.', 'error', 'Delete Failed');
+                }
+            }
+        }
+
+        // Include all the other functions from the original code with minor modifications
+        // (validation functions, UI update functions, etc.)
+        
+        function validateEmail(email) {
+            const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(email);
+        }
+
+        function validateForm(formType) {
+            let isValid = true;
+            
+            if (formType === 'login') {
+                const email = document.getElementById('login-email').value.trim();
+                const password = document.getElementById('login-password').value;
+                
+                if (!email) {
+                    showFieldError('login-email', 'Email is required');
+                    isValid = false;
+                } else if (!validateEmail(email)) {
+                    showFieldError('login-email', 'Please enter a valid email');
+                    isValid = false;
+                } else {
+                    clearFieldError('login-email');
+                }
+                
+                if (!password) {
+                    showFieldError('login-password', 'Password is required');
+                    isValid = false;
+                } else {
+                    clearFieldError('login-password');
+                }
+            } else if (formType === 'signup') {
+                const name = document.getElementById('signup-name').value.trim();
+                const email = document.getElementById('signup-email').value.trim();
+                const graduation = document.getElementById('signup-graduation').value;
+                const password = document.getElementById('signup-password').value;
+                
+                if (!name) {
+                    showFieldError('signup-name', 'Full name is required');
+                    isValid = false;
+                } else {
+                    clearFieldError('signup-name');
+                }
+                
+                if (!email) {
+                    showFieldError('signup-email', 'Email is required');
+                    isValid = false;
+                } else if (!validateEmail(email)) {
+                    showFieldError('signup-email', 'Please enter a valid email');
+                    isValid = false;
+                } else {
+                    clearFieldError('signup-email');
+                }
+                
+                if (!graduation || graduation < 1950 || graduation > 2050) {
+                    showFieldError('signup-graduation', 'Please enter a valid graduation year');
+                    isValid = false;
+                } else {
+                    clearFieldError('signup-graduation');
+                }
+                
+                if (!password) {
+                    showFieldError('signup-password', 'Password is required');
+                    isValid = false;
+                } else if (password.length < 6) {
+                    showFieldError('signup-password', 'Password must be at least 6 characters');
+                    isValid = false;
+                } else {
+                    clearFieldError('signup-password');
+                }
+            }
+            
+            return isValid;
+        }
+
+        function validateTreeForm() {
+            let isValid = true;
+            
+            const photo = document.getElementById('photo-preview').src;
+            const species = document.getElementById('tree-species').value.trim();
+            const activity = document.getElementById('tree-activity').value;
+            const location = document.getElementById('tree-location').value.trim();
+            const state = document.getElementById('tree-state').value.trim();
+            
+            if (!photo || photo.includes('data:image/svg+xml')) {
+                showFieldError('tree-photo', 'Please upload a photo of the tree');
+                isValid = false;
+            } else {
+                clearFieldError('tree-photo');
+            }
+            
+            if (!species) {
+                showFieldError('tree-species', 'Tree species is required');
+                isValid = false;
+            } else {
+                clearFieldError('tree-species');
+            }
+            
+            if (!activity) {
+                showFieldError('tree-activity', 'Activity type is required');
+                isValid = false;
+            } else {
+                clearFieldError('tree-activity');
+            }
+            
+            if (!location) {
+                showFieldError('tree-location', 'Location is required');
+                isValid = false;
+            } else {
+                clearFieldError('tree-location');
+            }
+            
+            if (!state) {
+                showFieldError('tree-state', 'State/region is required');
+                isValid = false;
+            } else {
+                clearFieldError('tree-state');
+            }
+            
+            return isValid;
+        }
+
+        function showFieldError(fieldId, message) {
+            const field = document.getElementById(fieldId);
+            const errorElement = document.getElementById(fieldId + '-error');
+            
+            if (field && errorElement) {
+                field.classList.add('error');
+                errorElement.classList.remove('hidden');
+                if (message) {
+                    errorElement.querySelector('span').textContent = message;
+                }
+            }
+        }
+
+        function clearFieldError(fieldId) {
+            const field = document.getElementById(fieldId);
+            const errorElement = document.getElementById(fieldId + '-error');
+            
+            if (field && errorElement) {
+                field.classList.remove('error');
+                field.classList.add('success');
+                errorElement.classList.add('hidden');
+                
+                setTimeout(() => {
+                    field.classList.remove('success');
+                }, 2000);
+            }
+        }
+
+        function setButtonLoading(button, loading, originalText = '') {
+            if (typeof button === 'string') {
+                button = document.getElementById(button);
+            }
+            if (!button) return;
+
+            if (loading) {
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+            } else {
+                button.disabled = false;
+                button.innerHTML = originalText || button.innerHTML.replace('<i class="fas fa-spinner fa-spin"></i> Loading...', '');
+            }
+        }
+
+        function updateConnectionStatus(status) {
+            const statusElement = document.getElementById('connection-status');
+            const statusMap = {
+                online: { class: '', text: 'Connected', icon: 'fa-wifi' },
+                offline: { class: 'offline', text: 'No Internet Connection', icon: 'fa-wifi-slash' },
+                reconnecting: { class: 'reconnecting', text: 'Reconnecting...', icon: 'fa-spinner fa-spin' }
+            };
+            
+            const config = statusMap[status] || statusMap.online;
+            statusElement.className = `connection-status ${config.class}`;
+            statusElement.innerHTML = `<i class="fas ${config.icon}"></i><span>${config.text}</span>`;
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        function updateUserInfo() {
+            const userName = currentUser.name ? currentUser.name.split(' ')[0] : 'User';
+            document.getElementById('home-user-name').textContent = userName;
+            document.getElementById('profile-user-name').textContent = currentUser.name || 'User Name';
+            document.getElementById('profile-user-email').textContent = currentUser.email || 'user@example.com';
+            document.getElementById('profile-user-graduation').textContent = currentUser.graduation || '2024';
+        }
+
+        function updateDashboardStats() {
+            const userTrees = trees.filter(tree => tree.plantedById === currentUser.id);
+            document.getElementById('home-tree-count').textContent = userTrees.length;
+        }
+
+        function updateLeaderboardRank() {
+            if (currentUser && leaderboard.length > 0) {
+                const userRank = leaderboard.findIndex(entry => entry.userId === currentUser.id) + 1;
+                const rankText = userRank > 0 ? `#${userRank}` : '#-';
+                document.getElementById('home-rank').textContent = rankText;
+                document.getElementById('profile-rank').textContent = rankText;
+            }
+        }
+
+        function updateRecentNewsletters() {
+            const container = document.getElementById('recent-newsletters');
+            
+            if (newsletters.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-newspaper"></i>
+                        <h3>No news yet</h3>
+                        <p>Check back later for community updates!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const recent = newsletters.slice(0, 3);
+            container.innerHTML = recent.map(newsletter => `
+                <div style="border-left: 4px solid #10b981; padding: 12px; margin-bottom: 12px; border-radius: 0 8px 8px 0;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 0.85em; color: #64748b;">By ${newsletter.author}</span>
+                        <span style="font-size: 0.8em; color: #94a3b8;">${formatDate(newsletter.date)}</span>
+                    </div>
+                    <div style="font-weight: 600; margin-bottom: 8px;">${newsletter.title}</div>
+                    <div style="color: #64748b; font-size: 0.9em;">${newsletter.content.substring(0, 150)}...</div>
+                </div>
+            `).join('');
+        }
+
+        function updateRecentAchievements() {
+            // Placeholder for achievements
+        }
+
+        function updateSessionsDisplay() {
+            updateUpcomingSessions();
+        }
+
+        function updateUpcomingSessions() {
+            const container = document.getElementById('upcoming-sessions');
+            
+            if (sessions.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-calendar"></i>
+                        <h3>No upcoming sessions</h3>
+                        <p>Check back later for community planting sessions!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = sessions.map(session => `
+                <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06); border: 1px solid #f1f5f9;">
+                    <div style="font-weight: 600; margin-bottom: 8px;">${session.title}</div>
+                    <div style="font-size: 0.85em; color: #64748b;">
+                        📍 ${session.location}<br>
+                        📅 ${formatDate(session.date)} at ${session.time}<br>
+                        🌳 ${session.species || 'Various species'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Navigation and Page Management
+        function showPage(pageName) {
+            console.log(`🔍 Showing page: ${pageName}`);
+            
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            document.getElementById(pageName + '-page').classList.add('active');
+            
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            document.querySelector(`.nav-item[data-page="${pageName}"]`).classList.add('active');
+            
+            window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+            updateFAB();
+            
+            switch(pageName) {
+                case 'home':
+                    loadDashboardData();
+                    break;
+                case 'trees':
+                    loadTreesData();
+                    break;
+                case 'sessions':
+                    loadSessions();
+                    break;
+                case 'profile':
+                    loadProfileData();
+                    break;
+            }
+        }
+
+        function updateFAB() {
+            const fab = document.getElementById('fab-button');
+            const currentPage = document.querySelector('.page.active');
+            
+            if (currentPage && currentPage.id === 'trees-page') {
+                fab.classList.add('show');
+            } else {
+                fab.classList.remove('show');
+            }
+        }
+
+        async function loadTreesData() {
+            try {
+                await loadTrees();
+                updateTreesStats();
+                updateTreesList();
+            } catch (error) {
+                showToast('Failed to load tree data. Please check your connection.', 'error', 'Loading Failed');
+            }
+        }
+
+        async function loadProfileData() {
+            try {
+                await Promise.all([
+                    loadTrees(),
+                    loadAchievements(),
+                    loadLeaderboard()
+                ]);
+                
+                updateProfileStats();
+                updateProfileAchievements();
+                updateProfileLeaderboard();
+            } catch (error) {
+                showToast('Some profile data may be outdated. Please refresh.', 'warning', 'Loading Warning');
+            }
+        }
+
+        function updateTreesStats() {
+            const userTrees = trees.filter(tree => tree.plantedById === currentUser.id);
+            
+            document.getElementById('trees-total-count').textContent = userTrees.length;
+            
+            const uniqueSpecies = new Set(userTrees.map(tree => tree.species)).size;
+            document.getElementById('trees-species-count').textContent = uniqueSpecies;
+            
+            const thisMonth = new Date().getMonth();
+            const thisYear = new Date().getFullYear();
+            const thisMonthTrees = userTrees.filter(tree => {
+                const treeDate = new Date(tree.date);
+                return treeDate.getMonth() === thisMonth && treeDate.getFullYear() === thisYear;
+            }).length;
+            document.getElementById('trees-this-month').textContent = thisMonthTrees;
+            
+            if (userTrees.length > 0) {
+                const avgAge = userTrees.reduce((sum, tree) => {
+                    const age = Math.floor((new Date() - new Date(tree.date)) / (1000 * 60 * 60 * 24));
+                    return sum + age;
+                }, 0) / userTrees.length;
+                document.getElementById('trees-avg-age').textContent = Math.round(avgAge);
+            }
+        }
+
+        function updateTreesList() {
+            const container = document.getElementById('trees-list');
+            const treesToShow = currentFilter === 'all' ? filteredTrees : 
+                               currentFilter === 'mine' ? filteredTrees.filter(tree => tree.plantedById === currentUser.id) :
+                               currentFilter === 'recent' ? filteredTrees.filter(tree => {
+                                   const treeDate = new Date(tree.date);
+                                   const weekAgo = new Date();
+                                   weekAgo.setDate(weekAgo.getDate() - 7);
+                                   return treeDate >= weekAgo;
+                               }) : filteredTrees;
+            
+            if (treesToShow.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-seedling"></i>
+                        <h3>No trees found</h3>
+                        <p>${currentFilter === 'mine' ? 'Start your green journey by planting your first tree!' : 'No trees match your current filter.'}</p>
+                        ${currentFilter === 'mine' ? '<button class="btn" onclick="showAddTreeForm()"><i class="fas fa-plus"></i> Plant Your First Tree</button>' : ''}
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = treesToShow.map(tree => `
+                <div class="tree-item">
+                    <img src="${tree.photo || 'data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot;><rect fill=&quot;%23e5e7eb&quot; width=&quot;60&quot; height=&quot;60&quot;/><text fill=&quot;%23374151&quot; x=&quot;50%&quot; y=&quot;50%&quot; text-anchor=&quot;middle&quot; dy=&quot;.3em&quot;>🌳</text></svg>'}" alt="${tree.species}" class="tree-image" 
+                         onerror="this.src='data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot;><rect fill=&quot;%23e5e7eb&quot; width=&quot;60&quot; height=&quot;60&quot;/><text fill=&quot;%23374151&quot; x=&quot;50%&quot; y=&quot;50%&quot; text-anchor=&quot;middle&quot; dy=&quot;.3em&quot;>🌳</text></svg>'">
+                    <div class="tree-info">
+                        <div class="tree-name">${tree.species}</div>
+                        <div class="tree-details">
+                            📍 ${tree.location}, ${tree.state}<br>
+                            👤 ${tree.plantedBy}<br>
+                            📅 ${formatDate(tree.date)} • ${tree.typeOfActivity}<br>
+                            ${tree.remarks ? '📝 ' + tree.remarks : ''}
+                        </div>
+                    </div>
+                    ${tree.plantedById === currentUser.id ? `
+                    <div class="tree-actions">
+                        <button class="tree-action-btn delete" onclick="deleteTree('${tree.id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        function updateProfileStats() {
+            const userTrees = trees.filter(tree => tree.plantedById === currentUser.id);
+            
+            document.getElementById('profile-trees-planted').textContent = userTrees.length;
+            document.getElementById('profile-sessions-attended').textContent = 0; // Placeholder
+            
+            const uniqueSpecies = new Set(userTrees.map(tree => tree.species)).size;
+            document.getElementById('profile-species-planted').textContent = uniqueSpecies;
+        }
+
+        function updateProfileAchievements() {
+            const container = document.getElementById('user-achievements');
+            
+            if (achievements.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-trophy"></i>
+                        <h3>No achievements yet</h3>
+                        <p>Start planting trees to unlock your first achievement!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = achievements.map(achievement => `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border-radius: 8px; margin-bottom: 8px; border: 1px solid #f1f5f9;">
+                    <div style="font-size: 2em; width: 50px; text-align: center;">${achievement.icon}</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 2px;">${achievement.name}</div>
+                        <div style="font-size: 0.85em; color: #64748b;">${achievement.description}</div>
+                        <div style="font-size: 0.75em; color: #94a3b8; margin-top: 4px;">Unlocked ${formatDate(achievement.unlockedAt)}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateProfileLeaderboard() {
+            const container = document.getElementById('leaderboard');
+            
+            if (leaderboard.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-users"></i>
+                        <h3>Loading leaderboard...</h3>
+                    </div>
+                `;
+                return;
+            }
+            
+            const top10 = leaderboard.slice(0, 10);
+            container.innerHTML = top10.map(entry => {
+                const rankColor = entry.rank === 1 ? '#fbbf24' : 
+                                 entry.rank === 2 ? '#9ca3af' : 
+                                 entry.rank === 3 ? '#92400e' : '#10b981';
+                
+                return `
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border-radius: 8px; margin-bottom: 8px; border: 1px solid #f1f5f9; ${entry.userId === currentUser.id ? 'background: #fef3c7; border-color: #fbbf24;' : ''}">
+                        <div style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; font-size: 0.9em; background: ${rankColor};">
+                            ${entry.rank <= 3 ? (entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : '🥉') : entry.rank}
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: #1e293b;">
+                                ${entry.name} ${entry.userId === currentUser.id ? '(You)' : ''}
+                            </div>
+                            <div style="font-size: 0.85em; color: #64748b;">
+                                Graduation: ${entry.graduation || 'N/A'}
+                            </div>
+                        </div>
+                        <div style="font-weight: 600; color: #10b981; font-size: 1.1em;">${entry.count}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Tree form and interaction functions
+        function showAddTreeForm() {
+            const form = document.getElementById('add-tree-form');
+            if (form.classList.contains('hidden')) {
+                form.classList.remove('hidden');
+                form.scrollIntoView({ behavior: 'smooth' });
+                if (!document.getElementById('trees-page').classList.contains('active')) {
+                    showPage('trees');
+                }
+            }
+        }
+
+        function toggleAddTreeForm() {
+            const form = document.getElementById('add-tree-form');
+            form.classList.toggle('hidden');
+        }
+
+        function requestLocation() {
+            if ('geolocation' in navigator) {
+                showToast('Requesting location access...', 'info', 'Location Service', 3000);
+                
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        document.getElementById('location-info').classList.add('hidden');
+                        showToast('Location captured successfully! 📍', 'success', 'Location Acquired');
+                    },
+                    error => {
+                        console.error('Location error:', error);
+                        let errorMessage = 'Unable to get location.';
+                        let errorTitle = 'Location Error';
+                        
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorTitle = 'Permission Denied';
+                                errorMessage = 'Please enable location access in your browser settings and try again.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorTitle = 'Location Unavailable';
+                                errorMessage = 'Your location is currently unavailable. Please try again.';
+                                break;
+                            case error.TIMEOUT:
+                                errorTitle = 'Request Timeout';
+                                errorMessage = 'Location request timed out. Please try again.';
+                                break;
+                            default:
+                                errorMessage = 'An unknown error occurred while getting your location.';
+                                break;
+                        }
+                        
+                        showToast(errorMessage, 'error', errorTitle);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 60000
+                    }
+                );
+            } else {
+                showToast('Geolocation is not supported by this browser. Please enter location manually.', 'warning', 'Feature Unavailable');
+            }
+        }
+
+        function handlePhotoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Validate file size (5MB limit)
+            if (file.size > 5 * 1024 * 1024) {
+                showFieldError('tree-photo', 'Photo size must be less than 5MB');
+                event.target.value = '';
+                return;
+            }
+            
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                showFieldError('tree-photo', 'Please select a valid image file');
+                event.target.value = '';
+                return;
+            }
+
+            clearFieldError('tree-photo');
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('photo-preview');
+                preview.src = e.target.result;
+                preview.classList.remove('hidden');
+                
+                if (!userLocation) {
+                    document.getElementById('location-info').classList.remove('hidden');
+                }
+                
+                showToast('Photo uploaded successfully!', 'success', '', 2000);
+            };
+            
+            reader.onerror = function() {
+                showFieldError('tree-photo', 'Failed to read the image file');
+                event.target.value = '';
+            };
+            
+            reader.readAsDataURL(file);
+        }
+
+        // Filter and search functions
+        function filterTrees(filter) {
+            currentFilter = filter;
+            
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+            
+            updateTreesList();
+            
+            const title = filter === 'all' ? 'All Trees' : 
+                         filter === 'mine' ? 'My Trees' : 
+                         'Recent Trees';
+            document.getElementById('trees-list-title').textContent = title;
+        }
+
+        function searchTrees() {
+            const searchTerm = document.getElementById('tree-search').value.toLowerCase();
+            
+            if (searchTerm === '') {
+                filteredTrees = trees;
+            } else {
+                filteredTrees = trees.filter(tree => 
+                    tree.species.toLowerCase().includes(searchTerm) ||
+                    tree.location.toLowerCase().includes(searchTerm) ||
+                    tree.plantedBy.toLowerCase().includes(searchTerm) ||
+                    tree.state.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            updateTreesList();
+            
+            if (searchTerm && filteredTrees.length === 0) {
+                showToast(`No trees found matching "${searchTerm}"`, 'info', 'Search Results', 3000);
+            }
+        }
+
+        function clearTreeFilters() {
+            document.getElementById('tree-search').value = '';
+            filteredTrees = trees;
+            currentFilter = 'all';
+            
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
+            
+            updateTreesList();
+            document.getElementById('trees-list-title').textContent = 'All Trees';
+            showToast('Filters cleared', 'info', '', 2000);
+        }
+
+        // Map functions
+        function toggleTreeMap() {
+            const mapContainer = document.getElementById('tree-map-container');
+            const toggle = document.querySelector('.map-toggle');
+            
+            if (mapContainer.classList.contains('hidden')) {
+                mapContainer.classList.remove('hidden');
+                toggle.classList.add('active');
+                setTimeout(() => initializeTreeMap(), 100);
+            } else {
+                mapContainer.classList.add('hidden');
+                toggle.classList.remove('active');
+                if (treeMap) {
+                    treeMap.remove();
+                    treeMap = null;
+                }
+            }
+        }
+
+        function initializeTreeMap() {
+            try {
+                if (treeMap) {
+                    treeMap.remove();
+                }
+                
+                treeMap = L.map('tree-map').setView([20.5937, 78.9629], 5); // India center
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(treeMap);
+                
+                // Add tree markers
+                const treesToMap = filteredTrees.filter(tree => tree.lat && tree.lng);
+                
+                if (treesToMap.length === 0) {
+                    showToast('No trees with GPS coordinates to display on map', 'info', 'Map Information', 3000);
+                    return;
+                }
+                
+                treesToMap.forEach(tree => {
+                    L.marker([tree.lat, tree.lng])
+                        .addTo(treeMap)
+                        .bindPopup(`
+                            <div style="text-align: center;">
+                                <strong>${tree.species}</strong><br>
+                                📍 ${tree.location}<br>
+                                👤 ${tree.plantedBy}<br>
+                                📅 ${formatDate(tree.date)}<br>
+                                🌱 ${tree.typeOfActivity}
+                            </div>
+                        `);
+                });
+                
+                // Fit map to markers if there are any
+                const group = new L.featureGroup(treesToMap.map(tree => L.marker([tree.lat, tree.lng])));
+                treeMap.fitBounds(group.getBounds().pad(0.1));
+            } catch (error) {
+                console.error('Map initialization error:', error);
+                showToast('Failed to load map. Please try again.', 'error', 'Map Error');
+            }
+        }
+
+        // Export function
+        function exportTreeData() {
+            try {
+                const userTrees = trees.filter(tree => tree.plantedById === currentUser.id);
+                
+                if (userTrees.length === 0) {
+                    showToast('No trees to export! Plant some trees first.', 'warning', 'Export Warning');
+                    return;
+                }
+                
+                const csvContent = "data:text/csv;charset=utf-8," 
+                    + "Date,Species,Location,State,Activity,Remarks,Latitude,Longitude\n"
+                    + userTrees.map(tree => 
+                        `${tree.date},"${tree.species}","${tree.location}","${tree.state}","${tree.typeOfActivity}","${tree.remarks || ''}","${tree.lat || ''}","${tree.lng || ''}"`
+                    ).join("\n");
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `my_trees_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                showToast(`Successfully exported ${userTrees.length} tree records! 📊`, 'success', 'Export Complete');
+            } catch (error) {
+                console.error('Export error:', error);
+                showToast('Failed to export data. Please try again.', 'error', 'Export Failed');
+            }
+        }
+
+        // Auth form switching
+        function showLogin() {
+            document.getElementById('login-form').classList.remove('hidden');
+            document.getElementById('signup-form').classList.add('hidden');
+        }
+
+        function showSignup() {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('signup-form').classList.remove('hidden');
+        }
+
+        // Placeholder functions
+        function showNotifications() {
+            showToast('Notifications feature is coming soon! You\'ll be able to receive updates about community events and achievements.', 'info', 'Coming Soon 🔔');
+        }
+
+        function showCreateSessionForm() {
+            showToast('Session creation feature is in development! Admins will soon be able to organize tree planting events.', 'info', 'Coming Soon 📅');
+        }
+
+        function showUserManagement() {
+            showToast('User management panel is being developed! This will allow admins to manage community members.', 'info', 'Coming Soon 👥');
+        }
+
+        function showNewsletterCreation() {
+            showToast('Newsletter creation feature is coming soon! Share updates and inspire the community.', 'info', 'Coming Soon 📝');
+        }
+
+        // Event Listeners
+        document.addEventListener('keydown', function(e) {
+            if (e.altKey) {
+                switch(e.key) {
+                    case '1':
+                        e.preventDefault();
+                        showPage('home');
+                        break;
+                    case '2':
+                        e.preventDefault();
+                        showPage('trees');
+                        break;
+                    case '3':
+                        e.preventDefault();
+                        showPage('sessions');
+                        break;
+                    case '4':
+                        e.preventDefault();
+                        showPage('profile');
+                        break;
+                }
+            }
+        });
+
+        // Network status monitoring
+        window.addEventListener('online', () => {
+            updateConnectionStatus('online');
+            showToast('Internet connection restored! All features are now available.', 'success', 'Back Online 🌐');
+        });
+        
+        window.addEventListener('offline', () => {
+            updateConnectionStatus('offline');
+            showToast('You are currently offline. Some features may not work until connection is restored.', 'warning', 'Connection Lost 📶');
+        });
+
+        console.log('🌳 TreeTracker fully loaded and ready!');
+        console.log('🔍 API Base URL:', API_BASE_URL);
+    </script>
+</body>
+</html>
