@@ -1,0 +1,18 @@
+{
+  "name": "Tree Planting Tracker",
+  "short_name": "TreeTracker",
+  "description": "Track, Map, and Celebrate Every Tree Planted",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#4CAF50",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/svgs/solid/tree.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
